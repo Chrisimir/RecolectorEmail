@@ -9,7 +9,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace RecolectorEmail
 {
@@ -20,7 +19,20 @@ namespace RecolectorEmail
         static string[] Scopes = { GmailService.Scope.GmailReadonly };
         static string ApplicationName = "RecolectorEmail";
 
-        public SortedList<string, string> GetMails(DateTime lastUpdate)
+        public struct TimeInterval
+        {
+            public static string start;
+            public static string end;
+        }
+
+        public SortedList<string, string> GetMails(DateTime startDate, DateTime endDate)
+        {
+            TimeInterval.start = startDate.ToString("yyyy/MM/dd");
+            TimeInterval.end = endDate.ToString("yyyy/MM/dd");
+
+            return this.GetMails(startDate, true);
+        }
+        public SortedList<string, string> GetMails(DateTime lastUpdate, bool isInterval)
         {
             UserCredential credential;
             SortedList<string, string> mails = new SortedList<string, string>();
@@ -31,7 +43,7 @@ namespace RecolectorEmail
                 string credPath = System.Environment.GetFolderPath(
                     System.Environment.SpecialFolder.Personal);
                 // TODO: Change this path
-                credPath = Path.Combine(credPath, ".credentials/gmail-dotnet-quickstart.json");
+                credPath = Path.Combine(credPath, ".credentials/MailRecolector.json");
 
                 credential = GoogleWebAuthorizationBroker.AuthorizeAsync(
                     GoogleClientSecrets.Load(stream).Secrets,
@@ -48,12 +60,29 @@ namespace RecolectorEmail
                 ApplicationName = ApplicationName,
             });
 
-            // Takes messages that are after the date in parameter
-            List<Message> messages = ListMessages(service, "me", "after:" + lastUpdate.ToString("yyyy/MM/dd"));
+            // Takes messages that fulfill the parameters
+            string parameter = "";
+            if (isInterval)
+            {
+                parameter = "after:" + TimeInterval.start +
+                            "before:" + TimeInterval.end;
+            }
+            else
+            {
+                parameter = "after:" + lastUpdate.ToString("yyyy/MM/dd");
+
+                // Saves last update date
+                HistoryData.SetLastUpdateDate(DateTime.Now);
+            }
+            List<Message> messages = ListMessages(service, "me", parameter);
+            
             foreach (var messageItem in messages)
             {
-                String from = "";
-                String body = "";
+                // NUEVO
+                string name = "";
+
+                string from = "";
+                string body = "";
 
                 var messageContent =
                     service.Users.Messages.Get("me", messageItem.Id).Execute();
@@ -61,12 +90,16 @@ namespace RecolectorEmail
                 {
                     if (mParts.Name == "From")
                     {
-                        if (mParts.Value.Contains('<'))
-                        {
-                            from = mParts.Value.Split('<', '>')[1];
-                        }
-                        else
-                            from = mParts.Value;
+                        //if (mParts.Value.Contains('<'))
+                        //{
+                        //    // NUEVO
+                        //    name = mParts.Value.Split('<', '>')[0];
+
+                        //    from = mParts.Value.Split('<', '>')[1];
+                        //}
+                        //else
+                        //    from = mParts.Value;
+                        from = mParts.Value;
                     }
                     else if (from != "")
                     {
